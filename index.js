@@ -1,4 +1,6 @@
 var find = require('lodash');
+var MongoClient = require('mongodb').MongoClient;
+var url = 'mongodb://duclinh:namnam@ds147965.mlab.com:47965/appchat';
 var express = require('express');
 var app = express();
 var http = require('http').createServer(app).listen(3000, function () {
@@ -48,6 +50,7 @@ const ERROR_INVAILD = 103;
 const ERROR_NOT_FOUND = 104;
 const ERROR_TRY_AGAIN = 105;
 const ERROR_ALREADY_LOGIN = 106;
+const ERROR_SYSTEM = 107;
 
 var listUsersOnline = [];
 // when there is person connect
@@ -58,46 +61,74 @@ io.on('connection', function (socket) {
 		// check exitst mail
 		emailCheck(data.account)
 		.then(function (res) {
-			console.log(res);
 			if(res){
-				// when email invaild
-				console.log(res);
-				fs.readFile(__dirname +'/public/data/users.json','utf8', function(err,users) {
-					var objectUsers = JSON.parse(users);
-					if(find.findIndex(objectUsers.list, {account:data.account}) ===-1){
-						// when account not exists
-						console.log('thanh cong');
-						socket.emit('resultSignUp', {
-							status: ERROR_SUCCESS
+				// when email vaild
+				console.log('Mail hợp lệ');
+				MongoClient.connect(url,function (err, db) {
+					if(err){
+						socket.emit('resultSignUp',{
+							status: ERROR_SYSTEM
 						});
-						objectUsers.list.push({account:data.account, password:data.password,avatar:'/data/avatar/defaultavatar.jpg'});
-						fs.writeFile(__dirname+'/public/data/users.json', JSON.stringify(objectUsers, null, 2),'utf8', function (err) {
-						console.log(err);
-						});
+						console.log('connect that bai');
+						return;
 					}
-					else {
-						// when account already exists
+
+					var collection = db.collection('listAccount');
+					collection.find({account:data.account}).toArray(function (err, docs) {
+						// error
+						if(err){
+							socket.emit('resultSignUp',{
+								status: ERROR_SYSTEM
+							});
+							console.log("Lỗi hệ thống");
+							return;
+						}
+						// successfull
+						if(docs.length === 0){
+							// account vaild
+							collection.insertOne({
+								account:data.account,
+								password:data.password,
+								avatar:'/data/avatar/defaultavatar.jpg'
+							}, function (err, result) {
+								// error
+								if(err){
+									console.log('Lỗi hệ thống');
+									socket.emit('resultSignUp',{
+										status: ERROR_SYSTEM
+									});
+									return;
+								}
+								//successfull
+								console.log("Thành công");
+								socket.emit('resultSignUp', {
+									status: ERROR_SUCCESS
+								});
+								return;
+							});
+						}
+						// account already exists
+						console.log("account đã tồn tại");
 						socket.emit('resultSignUp',{
 							status: ERROR_ALREADY
 						});
-					}
-
+						return;
+					});
 				});
 			}
-			else{
-				console.log("thua");
-				// when email not invaild
-				socket.emit('resultSignUp', {
-					status: ERROR_MAIL
-				});
-
-			}
+			// when email not invaild
+			console.log("Lỗi mail");
+			socket.emit('resultSignUp', {
+				status: ERROR_MAIL
+			});
+			return;
 		})
 		.catch(function (err) {
 			console.log(err);
 			socket.emit('resultSignUp', {
 				status: ERROR_MAIL
 			});
+			return;
 		});
 	});
 
@@ -252,3 +283,11 @@ app.use(express.static('public'));
  	form.parse(req);
 
  });
+
+MongoClient.connect(url,function (err, db) {
+	if(err){
+		console.log('connect that bai');
+		return;
+	}
+	console.log('connect thanh cong');
+});
