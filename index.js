@@ -36,7 +36,7 @@ format profileAccount
 	103 invaild password or account not exist
 */
 /*
-	userOnlien  {
+	userOnline  {
 		username
 		socket
 		account
@@ -134,42 +134,64 @@ io.on('connection', function (socket) {
 
 	// when there is login
 	socket.on('login', function (data) {
-		fs.readFile(__dirname +'/public/data/users.json','utf8', function(err,users) {
-			var objectUsers = JSON.parse(users);
-			var indexRemove = find.findIndex(listUsersOnline, {
-				account:data.account
-			});
-			if(indexRemove!==-1){
-				console.log(listUsersOnline);
-				socket.broadcast.emit('removeUser', listUsersOnline[indexRemove]);
-				listUsersOnline.splice(indexRemove,1);
-				console.log("da remove");
+		MongoClient.connect(url,function (err, db) {
+			if(err){
+				console.log('connect that bai');
+				socket.emit('resultLogin', {
+					status: ERROR_SYSTEM
+				});
+				return;
 			}
-			var indexUsers = find.findIndex(objectUsers.list, data);
-			if(indexUsers!==-1 ){
+			console.log('connect thanh cong');
+			var collection = db.collection('listAccount');
+			collection.find({
+				account: data.account,
+				password: data.password
+			}).toArray(function (err, docs) {
+				if(err){
+					console.log('He thong loi');
+					socket.emit('resultLogin', {
+						status: ERROR_SYSTEM
+					});
+					return;
+				}
+				// successfull
+				if(docs.length === 0 ){
+					// login failure
+					console.log('login that bai');
+					socket.emit('resultLogin', {
+						status: ERROR_INVAILD
+					});
+					return;
+				}
+				// login successfull
+				console.log('login thanh cong');
+				var indexRemove = find.findIndex(listUsersOnline, {
+					account:data.account
+				});
+				if(indexRemove !== -1){
+					// avoid 1 account login twice					
+					console.log(listUsersOnline);
+					socket.broadcast.emit('removeUser', listUsersOnline[indexRemove]);
+					listUsersOnline.splice(indexRemove,1);
+					console.log("da remove");
+				}
 				socket.join(data.account);
 				socket.emit('resultLogin', {
-					status:ERROR_SUCCESS,
+					status: ERROR_SUCCESS,
 					listUsersOnline: listUsersOnline
 				});
+				// add to list user online
 				listUsersOnline.push({
 					account:data.account,
 					socket:socket.id,
-					avatar:objectUsers.list[indexUsers].avatar
+					avatar:docs[0].avatar
 				});
-				socket.broadcast.emit('addUser', listUsersOnline[listUsersOnline.length-1]);	
-				console.log(data.account + ' '+ socket.id + ' login');
-
-		
-			}
-			else{
-				console.log(data.account + ' '+ socket.id+ ' that bai');
-				socket.emit('resultLogin', {
-					status:ERROR_INVAILD
-				});
-			}
+				socket.broadcast.emit('addUser', listUsersOnline[listUsersOnline.length-1]);
 			});
+		});
 	});
+
 	socket.on('logout', function () {
 		var index = find.findIndex(listUsersOnline, {
 			socket:socket.id
@@ -185,16 +207,34 @@ io.on('connection', function (socket) {
 
 	socket.on('forgetPassword', function (data) {
 		console.log('reset');
-		fs.readFile(__dirname + '/public/data/users.json', 'utf8', function (err, users) {
-			var objectUsers = JSON.parse(users);
-			var index = find.findIndex(objectUsers.list, data);
-			if(index ===-1){
+		MongoClient.connect(url, function (err, db) {
+			if(err){
+				// error
 				socket.emit('resultForgetPassword', {
-					status:ERROR_NOT_FOUND,
+					status: ERROR_SYSTEM
 				});
+				return;
 			}
-			else {
-				mailOption.to = objectUsers.list[index].account;
+			// successfull
+			var collection = db.collection('listAccount');
+			console.log(data);
+			collection.find({account: data.account}).toArray(function (err, docs) {
+				if(err){
+					//error
+					socket.emit('resultForgetPassword', {
+						status:ERROR_SYSTEM
+					});
+					return;
+				}
+				// successfull
+				if(docs.length === 0){
+					console.log(docs);
+					socket.emit('resultForgetPassword', {
+						status: ERROR_TRY_AGAIN
+					});
+					return;
+				}
+				mailOption.to = docs[0].account;
 				transporter.sendMail(mailOption, function (error, infor) {
 					if(error){
 						console.log(error);
@@ -210,7 +250,8 @@ io.on('connection', function (socket) {
 					}
 				});
 
-			}
+			});
+
 		});
 	});
 
@@ -283,11 +324,3 @@ app.use(express.static('public'));
  	form.parse(req);
 
  });
-
-MongoClient.connect(url,function (err, db) {
-	if(err){
-		console.log('connect that bai');
-		return;
-	}
-	console.log('connect thanh cong');
-});
