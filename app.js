@@ -1,25 +1,19 @@
-var find = require('lodash');
-var MongoClient = require('mongodb').MongoClient;
-var url = 'mongodb://duclinh:namnam@ds147965.mlab.com:47965/appchat';
 var express = require('express');
 var app = express();
-var http = require('http').createServer(app).listen(3000, function () {
-	console.log('server running port 3000');
+var http = require('http').createServer(app).listen(1911, function() {
+	console.log('server running port 1911');
 });
 var io = require('socket.io')(http);
 var emailCheck = require('email-check');
 var fs = require('fs');
 var formidable = require('formidable');
-var nodemailer = require('nodemailer');
 var path = require('path');
-var transporter = nodemailer.createTransport('smtps://koolsok96%40gmail.com:namnamnam@smtp.gmail.com');
-var mailOption = {
-	from: 'Admin App chat<koolsok96@gmail.com>',
-	to : 'haixoay96@gmail.com',
-	subject: 'Khoi phuc pass',
-	text: 'pass is 1000',
-	html: '<b>Password cua ban la 123456</b>'
-};
+var redisClient = require('./utils/redisDb.js').redisClient;
+var mysqlDb = require('./utils/mysqlDb.js').mysqlDb;
+var handleIo = require('./handleSocket/io.js').handleIo;
+handleIo(io);
+
+app.use(express.static('public'));
 /*
 format profileAccount
 {
@@ -52,7 +46,7 @@ const ERROR_TRY_AGAIN = 105;
 const ERROR_ALREADY_LOGIN = 106;
 const ERROR_SYSTEM = 107;
 
-var listUsersOnline = [];
+/*var listUsersOnline = [];
 // when there is person connect
 io.on('connection', function (socket) {
 	// when there is person sign up
@@ -323,4 +317,4 @@ app.use(express.static('public'));
 
  	form.parse(req);
 
- });
+ });*/
